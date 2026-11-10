@@ -109,17 +109,30 @@ $("backLoginBtn").addEventListener("click",() => {
   $("registerForm").classList.add("hidden");
   $("loginForm").classList.remove("hidden");
 });
-$("loginForm").addEventListener("submit",async e => {
+
+$("loginForm").addEventListener("submit", async e => {
   e.preventDefault();
-  if (!auth) return;
+  if (!auth) {
+    $("loginMsg").textContent = "Firebase belum siap.";
+    return;
+  }
+
   $("loginMsg").textContent = "Memeriksa akun...";
+
   try {
-    await signInWithEmailAndPassword(auth,$("email").value.trim(),$("password").value);
-    $("loginMsg").textContent = "";
-  } catch {
-    $("loginMsg").textContent = "Login gagal. Periksa email dan kata sandi.";
+    await signInWithEmailAndPassword(
+      auth,
+      $("email").value.trim(),
+      $("password").value
+    );
+    $("loginMsg").textContent = "Login berhasil. Memuat profil...";
+  } catch (error) {
+    console.error("LOGIN ERROR:", error);
+    $("loginMsg").textContent =
+      "Login gagal: " + (error.code || error.message);
   }
 });
+
 $("logoutBtn").addEventListener("click",() => auth && signOut(auth));
 $("registerForm").addEventListener("submit",async e => {
   e.preventDefault();

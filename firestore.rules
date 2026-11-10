@@ -1,0 +1,74 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+    function myUser() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isAdmin() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && myUser().role == 'admin' && myUser().active == true;
+    }
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      allow read: if isSelf(uid) || isAdmin();
+      // Registration can create only a student or pending teacher profile.
+      allow create: if isSelf(uid)
+        && request.resource.data.keys().hasOnly([
+          'name','email','role','active','approved','createdAt','className','major'
+        ])
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.role in ['siswa','guru']
+        && (
+          (request.resource.data.role == 'siswa'
+            && request.resource.data.active == true
+            && request.resource.data.approved == true
+            && request.resource.data.className in ['10','11','12']
+            && request.resource.data.major in ['TKR','TKJ'])
+          ||
+          (request.resource.data.role == 'guru'
+            && request.resource.data.active == false
+            && request.resource.data.approved == false)
+        );
+      allow update: if isAdmin()
+        || (isSelf(uid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['name','className','major'])
+          && resource.data.role == 'siswa');
+      allow delete: if isAdmin();
+    }
+
+    match /attendance/{recordId} {
+      allow read: if isAdmin()
+        || (signedIn() && resource.data.uid == request.auth.uid);
+      allow create, update: if signedIn()
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.role in ['siswa','guru']
+        && request.resource.data.status in ['Hadir','Sakit','Izin']
+        && request.resource.data.date is string
+        && request.resource.data.photo is string
+        && request.resource.data.photo.size() < 500000
+        && request.resource.data.name is string
+        && request.resource.data.keys().hasOnly([
+          'uid','name','email','role','className','major','date','status',
+          'note','photo','checkIn','checkOut','createdAt','updatedAt'
+        ])
+        && (
+          (myUser().role == 'siswa'
+            && request.resource.data.role == 'siswa'
+            && !('checkOut' in request.resource.data))
+          ||
+          (myUser().role == 'guru'
+            && myUser().active == true
+            && myUser().approved == true
+            && request.resource.data.role == 'guru')
+        );
+      allow delete: if isAdmin();
+    }
+  }
+}

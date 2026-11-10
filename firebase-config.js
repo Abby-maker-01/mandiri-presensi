@@ -1,8 +1,10 @@
-// Konfigurasi Firebase untuk proyek absensi.
-// Jangan pernah memasukkan password admin ke file ini.
+
 export const firebaseConfig = {
-  apiKey: "AIzaSyCtJag6lTFBCv7NWlZDgiekwnZntRse3V0",
-  authDomain: "absensi-smk-mandiri-haurgeulis.firebaseapp.com",
-  projectId: "absensi-smk-mandiri-haurgeulis",
-  appId: "1:228744659165:web:335fe569b5371ee8b71b34"
+  apiKey: "AIzaSyCZEM3NflpvB1Z8x17tpPsXUhzYhcDCv2w",
+  authDomain: "absensi-smk-mandiri-b2c45.firebaseapp.com",
+  projectId: "absensi-smk-mandiri-b2c45",
+  storageBucket: "absensi-smk-mandiri-b2c45.firebasestorage.app",
+  messagingSenderId: "415913823869",
+  appId: "1:415913823869:web:8e3827fd5872e3c0722b14",
+  measurementId: "G-TBTVHW0PKN"
 };

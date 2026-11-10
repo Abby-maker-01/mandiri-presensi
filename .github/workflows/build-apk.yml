@@ -1,0 +1,104 @@
+
+name: Build Absensi APK Baru
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ambil source code
+        uses: actions/checkout@v4
+
+      - name: Siapkan Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Siapkan Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Siapkan Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Siapkan file website
+        run: |
+          mkdir -p www
+          cp index.html app.js style.css firebase-config.js manifest.json logo.png www/
+
+      - name: Siapkan konfigurasi aplikasi
+        run: |
+          cat > package.json <<'EOF'
+          {
+            "name": "absensi-smk-mandiri-apk",
+            "version": "1.0.0",
+            "private": true,
+            "description": "Absensi SMK Mandiri Haurgeulis"
+          }
+          EOF
+
+          cat > capacitor.config.json <<'EOF'
+          {
+            "appId": "id.sch.smkmandirihaurgeulis.absensi",
+            "appName": "Absensi SMK Mandiri Haurgeulis",
+            "webDir": "www"
+          }
+          EOF
+
+      - name: Pastikan Capacitor CLI terpasang
+        run: |
+          npm install --save-exact @capacitor/core@7 @capacitor/cli@7 @capacitor/android@7 @capacitor/assets@3
+          test -x node_modules/.bin/capacitor
+
+      - name: Buat proyek Android
+        run: ./node_modules/.bin/capacitor add android
+
+      - name: Siapkan ikon logo sekolah
+        run: |
+          mkdir -p assets
+          cp logo.png assets/icon.png
+          cp logo.png assets/splash.png
+
+      - name: Buat ikon Android dari logo sekolah
+        run: ./node_modules/.bin/capacitor-assets generate --android     
+      
+      - name: Tambahkan izin kamera dan lokasi Android
+        run: |
+          MANIFEST="android/app/src/main/AndroidManifest.xml"
+
+          sed -i '/<manifest/a\
+              <uses-permission android:name="android.permission.CAMERA" />\
+              <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\
+              <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' "$MANIFEST"
+
+          echo "Memeriksa izin Android..."
+          grep -E 'CAMERA|ACCESS_COARSE_LOCATION|ACCESS_FINE_LOCATION' "$MANIFEST"
+          
+      - name: Sinkronkan website
+        run: npx cap sync android
+
+      - name: Bangun APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Simpan APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: absensi-smk-mandiri-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+
+          

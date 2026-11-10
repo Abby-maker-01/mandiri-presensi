@@ -1,6 +1,6 @@
-
-export const firebaseConfig = {
-  apiKey: "AIzaSyCZEM3NflpvB1Z8x17tpPsXUhzYhcDCv2w",
+// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+const firebaseConfig = {
+  apiKey: "AIzaSyCZ3EMNflpvB1Z8x17tpPsXUhzYhcDCv2w",
   authDomain: "absensi-smk-mandiri-b2c45.firebaseapp.com",
   projectId: "absensi-smk-mandiri-b2c45",
   storageBucket: "absensi-smk-mandiri-b2c45.firebasestorage.app",

@@ -227,9 +227,6 @@ $("loginForm").addEventListener("submit",async e => {
       $("password").value
     );
 
-    $("loginMsg").textContent =
-      "Login berhasil. Menunggu profil dimuat...";
-
   } catch (error) {
     console.error("LOGIN ERROR:", error);
 

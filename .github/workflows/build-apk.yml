@@ -64,6 +64,86 @@ jobs:
       - name: Buat proyek Android
         run: ./node_modules/.bin/capacitor add android
 
+        
+      - name: Aktifkan penyimpanan CSV Android
+        run: |
+          mkdir -p android/app/src/main/java/id/sch/smkmandirihaurgeulis/absensi
+
+          cat > android/app/src/main/java/id/sch/smkmandirihaurgeulis/absensi/MainActivity.java <<'EOF'
+          package id.sch.smkmandirihaurgeulis.absensi;
+
+          import android.content.ContentValues;
+          import android.net.Uri;
+          import android.os.Build;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.provider.MediaStore;
+          import android.util.Base64;
+          import android.webkit.JavascriptInterface;
+          import android.widget.Toast;
+          import com.getcapacitor.BridgeActivity;
+          import java.io.OutputStream;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  getBridge().getWebView().addJavascriptInterface(
+                      new CsvDownloadBridge(), "AndroidCsv"
+                  );
+              }
+
+              private class CsvDownloadBridge {
+                  @JavascriptInterface
+                  public boolean saveCsv(String base64, String filename) {
+                      try {
+                          if (Build.VERSION.SDK_INT < 29) return false;
+
+                          byte[] data = Base64.decode(base64, Base64.DEFAULT);
+
+                          ContentValues values = new ContentValues();
+                          values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
+                          values.put(MediaStore.MediaColumns.MIME_TYPE, "text/csv");
+                          values.put(
+                              MediaStore.MediaColumns.RELATIVE_PATH,
+                              Environment.DIRECTORY_DOWNLOADS
+                          );
+                          values.put(MediaStore.MediaColumns.IS_PENDING, 1);
+
+                          Uri uri = getContentResolver().insert(
+                              MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                              values
+                          );
+
+                          if (uri == null) return false;
+
+                          try (OutputStream out =
+                              getContentResolver().openOutputStream(uri)) {
+                              if (out == null) return false;
+                              out.write(data);
+                              out.flush();
+                          }
+
+                          ContentValues done = new ContentValues();
+                          done.put(MediaStore.MediaColumns.IS_PENDING, 0);
+                          getContentResolver().update(uri, done, null, null);
+
+                          runOnUiThread(() -> Toast.makeText(
+                              MainActivity.this,
+                              "CSV berhasil disimpan ke Download",
+                              Toast.LENGTH_LONG
+                          ).show());
+
+                          return true;
+                      } catch (Exception e) {
+                          return false;
+                      }
+                  }
+              }
+          }
+          EOF
+          
+
       - name: Siapkan ikon logo sekolah
         run: |
           mkdir -p assets

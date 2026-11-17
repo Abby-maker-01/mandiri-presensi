@@ -70,11 +70,11 @@ jobs:
           mkdir -p android/app/src/main/java/id/sch/smkmandirihaurgeulis/absensi
 
           cat > android/app/src/main/java/id/sch/smkmandirihaurgeulis/absensi/MainActivity.java <<'EOF'
+          
           package id.sch.smkmandirihaurgeulis.absensi;
 
           import android.content.ContentValues;
           import android.net.Uri;
-          import android.os.Build;
           import android.os.Bundle;
           import android.os.Environment;
           import android.provider.MediaStore;
@@ -85,6 +85,7 @@ jobs:
           import java.io.OutputStream;
 
           public class MainActivity extends BridgeActivity {
+
               @Override
               public void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -94,11 +95,12 @@ jobs:
               }
 
               private class CsvDownloadBridge {
+
                   @JavascriptInterface
                   public boolean saveCsv(String base64, String filename) {
-                      try {
-                          if (Build.VERSION.SDK_INT < 29) return false;
+                      Uri uri = null;
 
+                      try {
                           byte[] data = Base64.decode(base64, Base64.DEFAULT);
 
                           ContentValues values = new ContentValues();
@@ -108,9 +110,8 @@ jobs:
                               MediaStore.MediaColumns.RELATIVE_PATH,
                               Environment.DIRECTORY_DOWNLOADS
                           );
-                          values.put(MediaStore.MediaColumns.IS_PENDING, 1);
 
-                          Uri uri = getContentResolver().insert(
+                          uri = getContentResolver().insert(
                               MediaStore.Downloads.EXTERNAL_CONTENT_URI,
                               values
                           );
@@ -118,15 +119,11 @@ jobs:
                           if (uri == null) return false;
 
                           try (OutputStream out =
-                              getContentResolver().openOutputStream(uri)) {
-                              if (out == null) return false;
+                              getContentResolver().openOutputStream(uri, "w")) {
+                              if (out == null) throw new Exception("Gagal membuka file");
                               out.write(data);
                               out.flush();
                           }
-
-                          ContentValues done = new ContentValues();
-                          done.put(MediaStore.MediaColumns.IS_PENDING, 0);
-                          getContentResolver().update(uri, done, null, null);
 
                           runOnUiThread(() -> Toast.makeText(
                               MainActivity.this,
@@ -135,13 +132,17 @@ jobs:
                           ).show());
 
                           return true;
+
                       } catch (Exception e) {
+                          if (uri != null) {
+                              getContentResolver().delete(uri, null, null);
+                          }
                           return false;
                       }
                   }
               }
           }
-          EOF
+          
           
 
       - name: Siapkan ikon logo sekolah

@@ -309,8 +309,6 @@ function renderRecords() {
 $("searchName").addEventListener("input",renderRecords);
 
 $("exportBtn").addEventListener("click", () => {
-  const button = $("exportBtn");
-
   const rows = [[
     "Nama", "Email", "Peran", "Status",
     "Tanggal", "Jam masuk", "Jam pulang", "Catatan"
@@ -320,15 +318,13 @@ $("exportBtn").addEventListener("click", () => {
   const status = $("filterStatus").value;
   const search = $("searchName").value.toLowerCase();
 
-  const filtered = window.allRecords.filter(r =>
+  window.allRecords.filter(r =>
     r.role === "guru" &&
     (!month || (r.date || "").startsWith(month)) &&
     (!status || r.status === status) &&
     (`${r.name || ""} ${r.email || ""}`)
       .toLowerCase().includes(search)
-  );
-
-  filtered.forEach(r => {
+  ).forEach(r => {
     rows.push([
       r.name, r.email, "Guru", r.status,
       r.date, r.checkIn, r.checkOut, r.note
@@ -342,39 +338,36 @@ $("exportBtn").addEventListener("click", () => {
   ).join("\r\n");
 
   const filename = `rekap-absensi-${month || today()}.csv`;
+  const csvText = "\ufeff" + csv;
 
-  const blob = new Blob(
-    ["\ufeff", csv],
-    { type: "text/csv;charset=utf-8" }
-  );
+  // Simpan langsung melalui Android
+  if (window.AndroidCsv &&
+      typeof window.AndroidCsv.saveCsv === "function") {
+    try {
+      const bytes = new TextEncoder().encode(csvText);
+      let binary = "";
 
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
 
-  link.href = url;
-  link.download = filename;
-  link.style.display = "none";
+      const result = window.AndroidCsv.saveCsv(
+        btoa(binary),
+        filename
+      );
 
-  document.body.appendChild(link);
+      $("globalMsg").textContent = result
+        ? `CSV berhasil disimpan: ${filename}`
+        : "Gagal menyimpan CSV. Periksa dukungan Android.";
 
-  try {
-    link.click();
+    } catch (error) {
+      console.error(error);
+      $("globalMsg").textContent = "Gagal menyimpan CSV.";
+    }
 
-    $("globalMsg").textContent =
-      `Unduhan ${filename} sedang diproses.`;
-
-  } catch (error) {
-    $("globalMsg").textContent =
-      "Unduhan CSV gagal. Coba gunakan Chrome.";
-    console.error(error);
-  } finally {
-    link.remove();
-
-    // Beri waktu browser Android memproses unduhan.
-    setTimeout(() => {
-      URL.revokeObjectURL(url);
-    }, 60000);
+    return;
   }
+
+  $("globalMsg").textContent =
+    "Fitur penyimpanan Android tidak ditemukan. Build ulang APK.";
 });
-      
-        

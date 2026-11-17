@@ -35,7 +35,7 @@ if (!configured) {
     if (!user) { showLoggedOut(); return; }
     try {
       const snap = await getDoc(doc(db,"users",user.uid));
-      if (!snap.exists() || snap.data().role === "siswa" || !["guru","admin"].includes(snap.data().role) || snap.data().active !== true || (snap.data().role === "guru" && snap.data().approved !== true)) {
+      if (!snap.exists() || snap.data().active !== true || !["guru","admin"].includes(snap.data().role) || (snap.data().role === "guru" && snap.data().approved !== true)) {
         const pending = snap.exists() && snap.data().role === "guru" && snap.data().approved === false;
         await signOut(auth);
         showLoggedOut();
@@ -126,15 +126,15 @@ $("registerForm").addEventListener("submit",async e => {
   const name=$("registerName").value.trim(), email=$("registerEmail").value.trim();
   const password=$("registerPassword").value, role=$("registerRole").value, msg=$("registerMsg");
   if (!auth || !db) { msg.textContent="Firebase belum siap."; return; }
-  if (role !== "guru") { msg.textContent="Pendaftaran hanya tersedia untuk akun guru."; return; }
+  if (role !== "guru") { msg.textContent="Pendaftaran hanya tersedia untuk guru."; return; }
   const button=$("registerForm").querySelector('button[type="submit"]');
   registering=true; button.disabled=true; msg.textContent="Membuat akun...";
   let credential;
   try {
     credential=await createUserWithEmailAndPassword(auth,email,password);
     const userData = {
-      name, email, role:"guru", active:false,
-      approved:false,
+      name, email, role, active: false,
+      approved: false,
       createdAt: serverTimestamp()
     };
     await setDoc(doc(db,"users",credential.user.uid),userData);
@@ -220,6 +220,7 @@ async function refreshOwnAttendance() {
 async function saveAttendance(action) {
   if (!currentUser || !profile || profile.role!=="guru") return;
   const status=$("statusSelect").value, date=today(), id=recordId(currentUser.uid,date), ref=doc(db,"attendance",id);
+  if (profile.role!=="guru") return;
   if (action==="status") return;
   if (!photoData) { $("globalMsg").textContent="Ambil foto terlebih dahulu."; return; }
   if (action==="out" && status!=="Hadir") { $("globalMsg").textContent="Absen pulang hanya tersedia untuk guru berstatus Hadir."; return; }
@@ -239,7 +240,7 @@ async function saveAttendance(action) {
     if (action==="status" && old.checkIn) throw new Error("Absensi hari ini sudah tercatat. Hubungi admin jika perlu koreksi.");
     const patch={
       uid:currentUser.uid,name:profile.name||currentUser.email,email:currentUser.email||"",
-      role:profile.role,className:profile.className||"",major:profile.major||"",
+      role:profile.role,
       date,status,note:$("note").value.trim(),photo:photoData,updatedAt:serverTimestamp()
     };
     if (action==="status" || action==="in") patch.checkIn=timeNow();
@@ -285,14 +286,8 @@ async function rejectTeacher(uid) {
 }
 function esc(v) { return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
 async function loadRecords() {
-  try {
-    const snap=await getDocs(collection(db,"attendance"));
-    // Simpan seluruh dokumen di Firestore; tampilan admin hanya merangkum absensi guru.
-    window.allRecords=snap.docs.map(d=>d.data()).filter(r=>r.role==="guru");
-    renderRecords();
-  } catch {
-    $("teacherRecords").innerHTML='<div class="empty-state">Tidak dapat memuat data. Periksa Firestore Rules admin.</div>';
-  }
+  try { const snap=await getDocs(collection(db,"attendance")); window.allRecords=snap.docs.map(d=>d.data()); renderRecords(); }
+  catch { $("teacherRecords").innerHTML='<div class="empty-state">Tidak dapat memuat data. Periksa Firestore Rules admin.</div>'; }
 }
 function statusTag(status) {
   const cl=(status||"").toLowerCase();
@@ -302,54 +297,84 @@ function recordCard(r) {
   const photo=r.photo?`<img class="record-photo" src="${r.photo}" alt="Foto ${esc(r.name)}">`:`<div class="record-photo"></div>`;
   return `<article class="record-card">${photo}<div class="record-main"><strong>${esc(r.name||"Tanpa nama")}</strong><div class="record-meta">Guru<br>${esc(r.email||"")}<br>${esc(r.date||"")}</div>${statusTag(r.status)}${r.note?`<div class="record-meta">Catatan: ${esc(r.note)}</div>`:""}</div><div class="record-times"><div>Masuk <strong>${esc(r.checkIn||"—")}</strong></div><div>Pulang <strong>${esc(r.checkOut||"—")}</strong></div></div></article>`;
 }
-function selectedMonth() {
-  return $("filterMonth").value || today().slice(0,7);
-}
-function filteredMonthRecords() {
-  const month=selectedMonth(), status=$("filterStatus").value, search=$("searchName").value.toLowerCase();
-  return window.allRecords.filter(r=>(r.date||"").slice(0,7)===month&&(!status||r.status===status)&&(`${r.name||""} ${r.email||""}`.toLowerCase().includes(search))).sort((a,b)=>(a.date||"").localeCompare(b.date||"")||(a.name||"").localeCompare(b.name||""));
-}
 function renderRecords() {
-  const rows=filteredMonthRecords(), month=selectedMonth();
+  const month=$("filterMonth").value, status=$("filterStatus").value, search=$("searchName").value.toLowerCase();
+  const rows=window.allRecords.filter(r=>r.role==="guru"&&(!month||(r.date||"").startsWith(month))&&(!status||r.status===status)&&(`${r.name||""} ${r.email||""}`.toLowerCase().includes(search))).sort((a,b)=>(a.name||"").localeCompare(b.name||""));
   $("countTotal").textContent=rows.length;
   $("countPresent").textContent=rows.filter(r=>r.status==="Hadir").length;
   $("countOther").textContent=rows.filter(r=>r.status==="Sakit"||r.status==="Izin").length;
   $("teacherRecords").innerHTML=rows.length?rows.map(recordCard).join(""):'<div class="empty-state">Belum ada absensi guru pada bulan ini.</div>';
-  const [year,mon]=month.split("-").map(Number);
-  const label=new Intl.DateTimeFormat("id-ID",{month:"long",year:"numeric"}).format(new Date(year,mon-1,1));
-  $("historyMonthLabel").textContent=`Arsip ${label}. Pilih bulan lain untuk melihat riwayat sebelumnya. Data bulan lain tetap tersimpan.`;
 }
 ["filterMonth","filterStatus"].forEach(id=>$(id).addEventListener("change",renderRecords));
 $("searchName").addEventListener("input",renderRecords);
-$("exportBtn").addEventListener("click", async () => {
+
+$("exportBtn").addEventListener("click", () => {
   const button = $("exportBtn");
-  const rows = [["Nama","Email","Peran","Status","Tanggal","Jam masuk","Jam pulang","Catatan"]];
-  filteredMonthRecords().forEach(r => rows.push([
-    r.name, r.email, "Guru", r.status, r.date, r.checkIn, r.checkOut, r.note
-  ]));
 
-  // BOM menjaga karakter Indonesia tetap terbaca dengan benar di Excel.
-  const csv = rows.map(row => row.map(value =>
-    '"' + String(value ?? "").replace(/"/g, '""') + '"'
-  ).join(",")).join("\r\n");
-  const filename = `riwayat-absensi-guru-${selectedMonth()}.csv`;
-  const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
-  const file = new File([blob], filename, { type: "text/csv;charset=utf-8" });
+  const rows = [[
+    "Nama", "Email", "Peran", "Status",
+    "Tanggal", "Jam masuk", "Jam pulang", "Catatan"
+  ]];
 
-  button.disabled = true;
-  const oldLabel = button.textContent;
-  button.textContent = "Menyiapkan CSV...";
+  const month = $("filterMonth").value;
+  const status = $("filterStatus").value;
+  const search = $("searchName").value.toLowerCase();
+
+  const filtered = window.allRecords.filter(r =>
+    r.role === "guru" &&
+    (!month || (r.date || "").startsWith(month)) &&
+    (!status || r.status === status) &&
+    (`${r.name || ""} ${r.email || ""}`)
+      .toLowerCase().includes(search)
+  );
+
+  filtered.forEach(r => {
+    rows.push([
+      r.name, r.email, "Guru", r.status,
+      r.date, r.checkIn, r.checkOut, r.note
+    ]);
+  });
+
+  const csv = rows.map(row =>
+    row.map(value =>
+      '"' + String(value ?? "").replace(/"/g, '""') + '"'
+    ).join(",")
+  ).join("\r\n");
+
+  const filename = `rekap-absensi-${month || today()}.csv`;
+
+  const blob = new Blob(
+    ["\ufeff", csv],
+    { type: "text/csv;charset=utf-8" }
+  );
+
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = filename;
+  link.style.display = "none";
+
+  document.body.appendChild(link);
 
   try {
-    // Android: gunakan menu berbagi agar CSV bisa disimpan ke perangkat.
-    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-      await navigator.share({ files: [file], title: "Unduh rekap absensi" });
-      $("globalMsg").textContent = `File ${filename} siap dibagikan atau disimpan.`;
-    } else {
-      // Browser biasa: unduh melalui tautan sementara.
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = filename;
-      link.style.display = "none";
-      document.body.appendChild(lin
+    link.click();
+
+    $("globalMsg").textContent =
+      `Unduhan ${filename} sedang diproses.`;
+
+  } catch (error) {
+    $("globalMsg").textContent =
+      "Unduhan CSV gagal. Coba gunakan Chrome.";
+    console.error(error);
+  } finally {
+    link.remove();
+
+    // Beri waktu browser Android memproses unduhan.
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+    }, 60000);
+  }
+});
+      
+        
